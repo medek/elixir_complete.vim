@@ -1,0 +1,3 @@
+[submodule "extern/elixir_complete"]
+	path = extern/elixir_complete
+	url = https://github.com/medek/elixir_complete
