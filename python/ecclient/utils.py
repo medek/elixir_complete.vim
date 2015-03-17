@@ -15,6 +15,7 @@ import os
 import sys
 import socket
 import subprocess
+import time
 
 def on_windows():
     return sys.platform == 'win32'
@@ -38,3 +39,59 @@ def safe_popen(*args, **kwargs):
         kwargs['stdin'] = subprocess.PIPE if on_windows() else None
 
     return subprocess.Popen(*args, **kwargs)
+
+#Doesn't work on windows
+def pid_active(pid):
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        return False
+    else:
+        return True
+
+def test_connection(port):
+    try:
+        sock = socket.create_connection(('localhost', port))
+    except socket.error:
+        return False
+    else:
+        sock.close()
+        return True
+
+def loop_connect(port, timeout):
+    start = time.time()
+    sock = None
+    loop = True
+    while loop:
+        try:
+            sock = socket.create_connection(('localhost', port))
+        except socket.error:
+            if time.time() - start > timeout:
+                return None
+        else:
+            return sock
+
+    return sock
+
+def atomic_rename(src, dest):
+    #Here's where things get weird
+    #Need to use kernel32.MoveFileEx for atomic move operations
+    #And even then it might not be atomic...
+    #TODO: Find out if this actually works on windows :P
+    if on_windows():
+        from ctypes import *
+        #0x1 == MOVEFILE_REPLACE_EXISTING
+        ret = windll.kernel32.MoveFileExW(c_wchar_p(src), c_wchar_p(dest), c_uint(0x1))
+        if ret == 0:
+            print "Something went wrong talking to windows..."
+            return False
+        else:
+            return True
+    else:
+        try:
+            os.rename(src, dest)
+        except OSError:
+            print "Error renaming file"
+            return False
+        else:
+            return True

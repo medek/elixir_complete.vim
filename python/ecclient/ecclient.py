@@ -15,44 +15,61 @@ import os
 import time
 import socket
 from . import utils
+from . import server_list
+from . import message
 
 class ECClient(object):
     def __init__(self, user_options):
-        self._user_options = user_options
+        self._server_meta = {'project root': user_options['project root']}
+        self._plugin_root = user_options['plugin root']
         self._user_notified_about_crash = False
         self._server_stdout = None
         self._server_stderr = None
-        self._server_popen = None
         self._server_socket = None
+        self._server_popen = None
+        self._server_list = server_list.ServerList(os.path.join(self._plugin_root, "config/server_list.json"))
         self._setup_server()
 
-    def _setup_server(self):
-        #TODO:Attempt to reconnect if there's an existing server for the dir
+    def _new_server(self):
         server_port = utils.get_unused_port()
-        print server_port
         args = [ utils.path_to_server(), '--port={0}'.format(server_port),
-                 '--root={0}'.format(self._user_options['project root'])]
+                '--root={0}'.format(self._server_meta['project root'])]
+ 
         #until elixir_complete get's a LoggerFileBackend, just eat up std{in,out}
         with open(os.devnull, "w") as fnull:
+            print "launching server"
             self._server_popen = utils.safe_popen(args, stdout =fnull, stderr =fnull)
-        time.sleep(1) #need to sleep so elixir_complete has time to listen
-        self._server_socket = socket.create_connection(('localhost', server_port), timeout=5000)
+
+        self._server_socket = utils.loop_connect(server_port, 5)
+
+        self._server_meta['port'] = server_port
+        self._server_meta['cache'] = False
+        self._server_list.add_server(self._server_meta)
+
+    def _setup_server(self):
+        srv = self._server_list.server_running(self._server_meta['project root'])
+        print srv
+        if srv != None:
+            try:
+                self._server_socket = socket.create_connection(('localhost', srv['port']))
+                self._server_meta = srv
+                return
+            except socket.error:
+                print "couldn't connect to existing server (dead?)"
+        self._new_server()
 
     def is_server_alive(self):
-        ret = self._server_popen.poll()
-        return ret is None
-
-    def server_pid(self):
-        if not self._server_popen:
-            return -1 #I hope nobody tries to use this in a kill command!
-        return self._server_popen.pid
+        return message.is_alive(self._server_socket)
 
     def _server_cleanup(self):
         if self.is_server_alive():
+            message.halt_server(self._server_socket)
             self._server_socket.close()
-            self._server_popen.terminate()
 
     def restart_server(self):
         self._server_cleanup()
         self._setup_server()
 
+    def line_complete(self, line, column, filename, string):
+        message.line_complete(self._server_socket,
+                              line, column, filename, string)

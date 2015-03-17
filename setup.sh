@@ -36,6 +36,7 @@ if [[ ! -f "elixir_complete" ]]; then
   exit 1
 fi
 popd
-
+mkdir config/
+echo "[]" > config/server_list.json
 echo "****SUCCESS****"
 

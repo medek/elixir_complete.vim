@@ -31,7 +31,7 @@ function! s:SetupPython() abort
   exe 'python sys.path.insert(0, "' . s:python_folder_path .'")'
   py from ecclient.ecclient import ECClient
   "XXX: hack till the real stuff exists
-  exe 'python user_options = {"project root": "' . getcwd() . '"}'
+  exe 'python user_options = {"project root": "' . getcwd() . ', "plugin root": "' . s:script_folder_path . '"}'
   py ecc_state = ECClient(user_options)
   return 1
 endfunction
